@@ -1,7 +1,5 @@
 ﻿#pragma once
 #include "Solver.h"
-#include <sstream>
-#include <iomanip>
 
 namespace CMLab4 {
 
@@ -563,7 +561,7 @@ namespace CMLab4 {
                     2, 2);
 
                 // Справка
-                rtbTest->Text = BuildTestReport(*resTest, omega, method);
+                BuildTestReport(rtbTest, *resTest, omega, method);
 
                 tabControl->SelectedIndex = 1;
             }
@@ -623,7 +621,7 @@ namespace CMLab4 {
                     gcnew array<SurfacePlot^>{sfInitMain, sfMain, sfDiffMain, sfInitMain2, sfMain2},
                     2, 3);
 
-                rtbMain->Text = BuildMainReport(*resMain, *resMain2, omega, omega2, method);
+                BuildMainReport(rtbMain, *resMain, *resMain2, omega, omega2, method);
 
                 tabControl->SelectedIndex = 2;
             }
@@ -635,127 +633,127 @@ namespace CMLab4 {
         // ============================================================
         //  Формирование справок
         // ============================================================
-        String^ BuildTestReport(const SolverResult& r, double omega,
+        void BuildTestReport(RichTextBox^ rtb, const SolverResult& r, double omega,
             PoissonSolver::Method method)
         {
-            std::ostringstream oss;
-            oss << std::fixed;
-            oss << "СПРАВКА — ТЕСТОВАЯ ЗАДАЧА\r\n";
-            oss << "═══════════════════════════════════════════════════════════════\r\n";
-            oss << "Метод: " << (method == PoissonSolver::Method::SOR ?
-                "Верхняя релаксация (МВР)" : "Метод Зейделя") << "\r\n";
-            oss << "Сетка: n=" << r.n << ", m=" << r.m
-                << "  (h=" << std::setprecision(6) << r.h
-                << ", k=" << r.k << ")\r\n";
-            oss << "Параметр ω = " << std::setprecision(6) << omega << "\r\n";
-            oss << "Критерий остановки: εмет = " << std::setprecision(2) << std::scientific
-                << (double)nudEpsMet->Value << ", Nmax = " << (int)nudNmax->Value << "\r\n";
-            oss << std::fixed;
-            oss << "Итераций выполнено: N = " << r.iterDone << "\r\n";
-            oss << "Достигнутая точность метода: ε(N) = "
-                << std::setprecision(4) << std::scientific << r.methodError << "\r\n";
-            oss << "Норма невязки (max): ||R(N)|| = "
-                << std::setprecision(4) << std::scientific << r.residualNorm << "\r\n\r\n";
-            oss << "Тестовая задача должна быть решена с погрешностью ≤ 0.5·10⁻⁶\r\n";
-            oss << "Достигнутая погрешность: ε₁ = "
-                << std::setprecision(4) << std::scientific << r.epsilon1 << "\r\n";
+            rtb->Clear();
+            String^ methodName = (method == PoissonSolver::Method::SOR) ?
+                "Верхняя релаксация (МВР)" : "Метод Зейделя";
+
+            rtb->AppendText("СПРАВКА — ТЕСТОВАЯ ЗАДАЧА\r\n");
+            rtb->AppendText("═══════════════════════════════════════════════════════════════\r\n");
+            rtb->AppendText(String::Format("Метод: {0}\r\n", methodName));
+            rtb->AppendText(String::Format("Сетка: n={0}, m={1}  (h={2:F6}, k={3:F6})\r\n",
+                r.n, r.m, r.h, r.k));
+            rtb->AppendText(String::Format("Параметр ω = {0:F6}\r\n", omega));
+            rtb->AppendText(String::Format("Критерий остановки: εмет = {0:E2}, Nmax = {1}\r\n",
+                (double)nudEpsMet->Value, (int)nudNmax->Value));
+            rtb->AppendText(String::Format("Итераций выполнено: N = {0}\r\n", r.iterDone));
+            rtb->AppendText(String::Format("Достигнутая точность метода: ε(N) = {0:E4}\r\n",
+                r.methodError));
+            rtb->AppendText(String::Format("Норма невязки (max): ||R(N)|| = {0:E4}\r\n\r\n",
+                r.residualNorm));
+
+            rtb->AppendText("Тестовая задача должна быть решена с погрешностью ≤ 0.5·10⁻⁶\r\n");
+            rtb->AppendText(String::Format("Достигнутая погрешность: ε₁ = {0:E4}\r\n", r.epsilon1));
             if (r.epsilon1 <= 5e-7)
-                oss << "✓ ТРЕБОВАНИЕ ВЫПОЛНЕНО (ε₁ ≤ 0.5·10⁻⁶)\r\n";
+                rtb->AppendText("✓ ТРЕБОВАНИЕ ВЫПОЛНЕНО (ε₁ ≤ 0.5·10⁻⁶)\r\n");
             else
-                oss << "✗ Требование не выполнено. Увеличьте n, m или уменьшите εмет.\r\n";
-            oss << "Максимальное отклонение в узле: x=" << std::fixed << std::setprecision(4)
-                << (r.a + r.iMaxErr * r.h) << ", y="
-                << (r.c + r.jMaxErr * r.k) << "\r\n";
-            oss << "Начальное приближение: линейная интерполяция по x\r\n\r\n";
-            oss << "═══════════════════════════════════════════════════════════════\r\n";
-            oss << "ОЦЕНКИ ПОГРЕШНОСТИ:\r\n";
+                rtb->AppendText("✗ Требование не выполнено. Увеличьте n, m или уменьшите εмет.\r\n");
+            rtb->AppendText(String::Format("Максимальное отклонение в узле: x={0:F4}, y={1:F4}\r\n",
+                r.a + r.iMaxErr * r.h, r.c + r.jMaxErr * r.k));
+            rtb->AppendText("Начальное приближение: линейная интерполяция по x\r\n\r\n");
+
+            rtb->AppendText("═══════════════════════════════════════════════════════════════\r\n");
+            rtb->AppendText("ОЦЕНКИ ПОГРЕШНОСТИ:\r\n");
             double h2k2 = r.h * r.h + r.k * r.k;
-            oss << "  Погрешность итерационного метода:\r\n";
-            oss << "    ||Z(N)||∞ ≤ ||Z(N)||₂ ≤ ε(N)/λmin ≈ " << std::setprecision(4)
-                << std::scientific << r.methodError << "\r\n";
-            oss << "  Погрешность схемы (теорема о сходимости):\r\n";
-            oss << "    ||z||∞ ≤ C(h² + k²) ≈ C·" << std::setprecision(6) << std::fixed
-                << h2k2 << "  (C — константа)\r\n";
-            oss << "  Порядок аппроксимации схемы: 2\r\n\r\n";
-            oss << "ТАБЛИЦА ЗНАЧЕНИЙ (первые 6×6 узлов):\r\n";
-            oss << "  u*(xi,yj):\r\n";
+            rtb->AppendText("  Погрешность итерационного метода:\r\n");
+            rtb->AppendText(String::Format("    ||Z(N)||∞ ≤ ||Z(N)||₂ ≤ ε(N)/λmin ≈ {0:E4}\r\n",
+                r.methodError));
+            rtb->AppendText("  Погрешность схемы (теорема о сходимости):\r\n");
+            rtb->AppendText(String::Format("    ||z||∞ ≤ C(h² + k²) ≈ C·{0:F6}  (C — константа)\r\n",
+                h2k2));
+            rtb->AppendText("  Порядок аппроксимации схемы: 2\r\n\r\n");
+
+            rtb->AppendText("ТАБЛИЦА ЗНАЧЕНИЙ (первые 6×6 узлов):\r\n");
             int nShow = std::min(6, r.n);
             int mShow = std::min(6, r.m);
+            int Ny = r.m + 1;
+
+            rtb->AppendText("  u*(xi,yj):\r\n");
             for (int j = 0; j <= mShow; ++j) {
                 for (int i = 0; i <= nShow; ++i)
-                    oss << std::setw(12) << std::setprecision(6) << r.u[i * (r.m + 1) + j];
-                oss << "\r\n";
+                    rtb->AppendText(String::Format("{0,12:F6}", r.u[i * Ny + j]));
+                rtb->AppendText("\r\n");
             }
-            oss << "  v(N)(xi,yj):\r\n";
+            rtb->AppendText("  v(N)(xi,yj):\r\n");
             for (int j = 0; j <= mShow; ++j) {
                 for (int i = 0; i <= nShow; ++i)
-                    oss << std::setw(12) << std::setprecision(6) << r.v[i * (r.m + 1) + j];
-                oss << "\r\n";
+                    rtb->AppendText(String::Format("{0,12:F6}", r.v[i * Ny + j]));
+                rtb->AppendText("\r\n");
             }
-            oss << "  Разность u* − v(N):\r\n";
+            rtb->AppendText("  Разность u* − v(N):\r\n");
             for (int j = 0; j <= mShow; ++j) {
                 for (int i = 0; i <= nShow; ++i)
-                    oss << std::setw(12) << std::setprecision(2) << std::scientific
-                    << (r.u[i * (r.m + 1) + j] - r.v[i * (r.m + 1) + j]);
-                oss << "\r\n";
+                    rtb->AppendText(String::Format("{0,12:E2}",
+                        r.u[i * Ny + j] - r.v[i * Ny + j]));
+                rtb->AppendText("\r\n");
             }
-            return gcnew String(oss.str().c_str());
         }
 
-        String^ BuildMainReport(const SolverResult& r1, const SolverResult& r2,
+        void BuildMainReport(RichTextBox^ rtb, const SolverResult& r1, const SolverResult& r2,
             double omega, double omega2, PoissonSolver::Method method)
         {
-            std::ostringstream oss;
-            oss << std::fixed;
-            oss << "СПРАВКА — ОСНОВНАЯ ЗАДАЧА\r\n";
-            oss << "═══════════════════════════════════════════════════════════════\r\n";
-            oss << "Метод: " << (method == PoissonSolver::Method::SOR ?
-                "Верхняя релаксация (МВР)" : "Метод Зейделя") << "\r\n\r\n";
-            oss << "ОСНОВНАЯ СЕТКА (n=" << r1.n << ", m=" << r1.m << "):\r\n";
-            oss << "  ω = " << std::setprecision(6) << omega
-                << "  εмет = " << std::setprecision(2) << std::scientific
-                << (double)nudEpsMet->Value * 0.1 << "\r\n";
-            oss << std::fixed;
-            oss << "  Итераций: N = " << r1.iterDone
-                << "  ε(N) = " << std::scientific << std::setprecision(4) << r1.methodError << "\r\n";
-            oss << "  ||R(N)|| (max) = " << r1.residualNorm << "\r\n\r\n";
-            oss << "УТОЧНЁННАЯ СЕТКА (2n=" << r2.n << ", 2m=" << r2.m << "):\r\n";
-            oss << "  ω₂ = " << std::fixed << std::setprecision(6) << omega2
-                << "  εмет₂ = " << std::setprecision(2) << std::scientific
-                << (double)nudEpsMet->Value * 0.01 << "\r\n";
-            oss << std::fixed;
-            oss << "  Итераций: N₂ = " << r2.iterDone
-                << "  ε(N₂) = " << std::scientific << std::setprecision(4) << r2.methodError << "\r\n";
-            oss << "  ||R(N₂)|| (max) = " << r2.residualNorm << "\r\n\r\n";
-            oss << "Основная задача должна быть решена с точностью ≤ 0.5·10⁻⁶\r\n";
-            oss << "Достигнутая точность: ε₂ = "
-                << std::scientific << std::setprecision(4) << r1.epsilon2 << "\r\n";
+            rtb->Clear();
+            String^ methodName = (method == PoissonSolver::Method::SOR) ?
+                "Верхняя релаксация (МВР)" : "Метод Зейделя";
+
+            rtb->AppendText("СПРАВКА — ОСНОВНАЯ ЗАДАЧА\r\n");
+            rtb->AppendText("═══════════════════════════════════════════════════════════════\r\n");
+            rtb->AppendText(String::Format("Метод: {0}\r\n\r\n", methodName));
+
+            rtb->AppendText(String::Format("ОСНОВНАЯ СЕТКА (n={0}, m={1}):\r\n", r1.n, r1.m));
+            rtb->AppendText(String::Format("  ω = {0:F6}  εмет = {1:E2}\r\n",
+                omega, (double)nudEpsMet->Value * 0.1));
+            rtb->AppendText(String::Format("  Итераций: N = {0}  ε(N) = {1:E4}\r\n",
+                r1.iterDone, r1.methodError));
+            rtb->AppendText(String::Format("  ||R(N)|| (max) = {0:E4}\r\n\r\n", r1.residualNorm));
+
+            rtb->AppendText(String::Format("УТОЧНЁННАЯ СЕТКА (2n={0}, 2m={1}):\r\n", r2.n, r2.m));
+            rtb->AppendText(String::Format("  ω₂ = {0:F6}  εмет₂ = {1:E2}\r\n",
+                omega2, (double)nudEpsMet->Value * 0.01));
+            rtb->AppendText(String::Format("  Итераций: N₂ = {0}  ε(N₂) = {1:E4}\r\n",
+                r2.iterDone, r2.methodError));
+            rtb->AppendText(String::Format("  ||R(N₂)|| (max) = {0:E4}\r\n\r\n", r2.residualNorm));
+
+            rtb->AppendText("Основная задача должна быть решена с точностью ≤ 0.5·10⁻⁶\r\n");
+            rtb->AppendText(String::Format("Достигнутая точность: ε₂ = {0:E4}\r\n", r1.epsilon2));
             if (r1.epsilon2 <= 5e-7)
-                oss << "✓ ТРЕБОВАНИЕ ВЫПОЛНЕНО (ε₂ ≤ 0.5·10⁻⁶)\r\n";
+                rtb->AppendText("✓ ТРЕБОВАНИЕ ВЫПОЛНЕНО (ε₂ ≤ 0.5·10⁻⁶)\r\n");
             else
-                oss << "✗ Требование не выполнено. Увеличьте n, m или уменьшите εмет.\r\n";
-            oss << "Максимальное отклонение в узле: x=" << std::fixed << std::setprecision(4)
-                << (r1.a + r1.iMaxErr * r1.h) << ", y="
-                << (r1.c + r1.jMaxErr * r1.k) << "\r\n";
-            oss << "Начальное приближение (обе сетки): линейная интерполяция по x\r\n\r\n";
-            oss << "═══════════════════════════════════════════════════════════════\r\n";
-            oss << "ТАБЛИЦА v(N) (первые 6×6 узлов):\r\n";
+                rtb->AppendText("✗ Требование не выполнено. Увеличьте n, m или уменьшите εмет.\r\n");
+            rtb->AppendText(String::Format("Максимальное отклонение в узле: x={0:F4}, y={1:F4}\r\n",
+                r1.a + r1.iMaxErr * r1.h, r1.c + r1.jMaxErr * r1.k));
+            rtb->AppendText("Начальное приближение (обе сетки): линейная интерполяция по x\r\n\r\n");
+
+            rtb->AppendText("═══════════════════════════════════════════════════════════════\r\n");
             int nShow = std::min(6, r1.n);
             int mShow = std::min(6, r1.m);
+            int Ny1 = r1.m + 1;
+            int Ny2 = r2.m + 1;
+
+            rtb->AppendText("ТАБЛИЦА v(N) (первые 6×6 узлов):\r\n");
             for (int j = 0; j <= mShow; ++j) {
                 for (int i = 0; i <= nShow; ++i)
-                    oss << std::setw(12) << std::setprecision(6) << std::fixed
-                    << r1.v[i * (r1.m + 1) + j];
-                oss << "\r\n";
+                    rtb->AppendText(String::Format("{0,12:F6}", r1.v[i * Ny1 + j]));
+                rtb->AppendText("\r\n");
             }
-            oss << "ТАБЛИЦА v₂(N₂) в общих узлах (первые 6×6):\r\n";
+            rtb->AppendText("ТАБЛИЦА v₂(N₂) в общих узлах (первые 6×6):\r\n");
             for (int j = 0; j <= mShow; ++j) {
                 for (int i = 0; i <= nShow; ++i)
-                    oss << std::setw(12) << std::setprecision(6) << std::fixed
-                    << r2.v[(2 * i) * (2 * r1.m + 1) + (2 * j)];
-                oss << "\r\n";
+                    rtb->AppendText(String::Format("{0,12:F6}", r2.v[(2 * i) * Ny2 + (2 * j)]));
+                rtb->AppendText("\r\n");
             }
-            return gcnew String(oss.str().c_str());
         }
 
         // ============================================================
