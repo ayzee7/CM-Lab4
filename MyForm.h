@@ -182,11 +182,13 @@ namespace CMLab4 {
 
         // Вкладка «Тестовая задача»
         RichTextBox^ rtbTest;
+        DataGridView^ dgvTestExact, ^ dgvTestNum, ^ dgvTestDiff;
         Panel^ pnlTestGraphs;
         SurfacePlot^ sfExact, ^ sfInitTest, ^ sfNumTest, ^ sfDiffTest;
 
         // Вкладка «Основная задача»
         RichTextBox^ rtbMain;
+        DataGridView^ dgvMainNum, ^ dgvMainNum2, ^ dgvMainDiff;
         Panel^ pnlMainGraphs;
         SurfacePlot^ sfInitMain, ^ sfMain, ^ sfDiffMain;
         SurfacePlot^ sfInitMain2, ^ sfMain2;
@@ -401,10 +403,15 @@ namespace CMLab4 {
             auto split = gcnew SplitContainer();
             split->Dock = DockStyle::Fill;
             split->Orientation = Orientation::Horizontal;
-            split->SplitterDistance = 280;
+            split->SplitterDistance = 320;
             split->BackColor = Color::Transparent;
 
-            // Справка
+            // Верхняя секция: вкладки «Справка / u* / v(N) / разность»
+            auto tabsInfo = gcnew TabControl();
+            tabsInfo->Dock = DockStyle::Fill;
+            StyleTab(tabsInfo);
+
+            auto tpReport = gcnew TabPage("  Справка  "); StyleTabPage(tpReport);
             rtbTest = gcnew RichTextBox();
             rtbTest->Dock = DockStyle::Fill;
             rtbTest->ReadOnly = true;
@@ -413,7 +420,22 @@ namespace CMLab4 {
             rtbTest->Font = gcnew Drawing::Font("Consolas", 8.5f);
             rtbTest->BorderStyle = BorderStyle::None;
             rtbTest->Text = "Запустите расчёт тестовой задачи на вкладке «Параметры».";
-            split->Panel1->Controls->Add(rtbTest);
+            tpReport->Controls->Add(rtbTest);
+
+            auto tpExact = gcnew TabPage("  u*(x,y)  "); StyleTabPage(tpExact);
+            dgvTestExact = MakeGridView();
+            tpExact->Controls->Add(dgvTestExact);
+
+            auto tpNum = gcnew TabPage("  v⁽ᴺ⁾(x,y)  "); StyleTabPage(tpNum);
+            dgvTestNum = MakeGridView();
+            tpNum->Controls->Add(dgvTestNum);
+
+            auto tpDiff = gcnew TabPage("  u* − v⁽ᴺ⁾  "); StyleTabPage(tpDiff);
+            dgvTestDiff = MakeGridView();
+            tpDiff->Controls->Add(dgvTestDiff);
+
+            tabsInfo->TabPages->AddRange(gcnew array<TabPage^>{tpReport, tpExact, tpNum, tpDiff});
+            split->Panel1->Controls->Add(tabsInfo);
 
             // Графики (4 панели: u*, v(0), v(N), разность)
             pnlTestGraphs = gcnew Panel();
@@ -442,9 +464,15 @@ namespace CMLab4 {
             auto split = gcnew SplitContainer();
             split->Dock = DockStyle::Fill;
             split->Orientation = Orientation::Horizontal;
-            split->SplitterDistance = 280;
+            split->SplitterDistance = 320;
             split->BackColor = Color::Transparent;
 
+            // Верхняя секция: вкладки «Справка / v(N) / v2(N2) / разность»
+            auto tabsInfo = gcnew TabControl();
+            tabsInfo->Dock = DockStyle::Fill;
+            StyleTab(tabsInfo);
+
+            auto tpReport = gcnew TabPage("  Справка  "); StyleTabPage(tpReport);
             rtbMain = gcnew RichTextBox();
             rtbMain->Dock = DockStyle::Fill;
             rtbMain->ReadOnly = true;
@@ -453,7 +481,22 @@ namespace CMLab4 {
             rtbMain->Font = gcnew Drawing::Font("Consolas", 8.5f);
             rtbMain->BorderStyle = BorderStyle::None;
             rtbMain->Text = "Запустите расчёт основной задачи на вкладке «Параметры».";
-            split->Panel1->Controls->Add(rtbMain);
+            tpReport->Controls->Add(rtbMain);
+
+            auto tpNum = gcnew TabPage("  v⁽ᴺ⁾(x,y)  "); StyleTabPage(tpNum);
+            dgvMainNum = MakeGridView();
+            tpNum->Controls->Add(dgvMainNum);
+
+            auto tpNum2 = gcnew TabPage("  v₂⁽ᴺ²⁾(x,y)  "); StyleTabPage(tpNum2);
+            dgvMainNum2 = MakeGridView();
+            tpNum2->Controls->Add(dgvMainNum2);
+
+            auto tpDiff = gcnew TabPage("  v⁽ᴺ⁾ − v₂⁽ᴺ²⁾  "); StyleTabPage(tpDiff);
+            dgvMainDiff = MakeGridView();
+            tpDiff->Controls->Add(dgvMainDiff);
+
+            tabsInfo->TabPages->AddRange(gcnew array<TabPage^>{tpReport, tpNum, tpNum2, tpDiff});
+            split->Panel1->Controls->Add(tabsInfo);
 
             pnlMainGraphs = gcnew Panel();
             pnlMainGraphs->Dock = DockStyle::Fill;
@@ -560,6 +603,11 @@ namespace CMLab4 {
                     gcnew array<SurfacePlot^>{sfExact, sfInitTest, sfNumTest, sfDiffTest},
                     2, 2);
 
+                // Таблицы
+                FillGrid(dgvTestExact, &resTest->u,  n, m, a, b, c, d, false);
+                FillGrid(dgvTestNum,   &resTest->v,  n, m, a, b, c, d, false);
+                FillGrid(dgvTestDiff,  diffTestData, n, m, a, b, c, d, true);
+
                 // Справка
                 BuildTestReport(rtbTest, *resTest, omega, method);
 
@@ -621,6 +669,16 @@ namespace CMLab4 {
                     gcnew array<SurfacePlot^>{sfInitMain, sfMain, sfDiffMain, sfInitMain2, sfMain2},
                     2, 3);
 
+                // Таблицы — v2 проектируется в общие узлы основной сетки (i,j) ↔ (2i,2j)
+                std::vector<double> v2Coarse((n + 1) * (m + 1));
+                for (int i = 0; i <= n; ++i)
+                    for (int j = 0; j <= m; ++j)
+                        v2Coarse[i * (m + 1) + j] = resMain2->v[(2 * i) * (2 * m + 1) + (2 * j)];
+
+                FillGrid(dgvMainNum,  &resMain->v,  n, m, a, b, c, d, false);
+                FillGrid(dgvMainNum2, &v2Coarse,    n, m, a, b, c, d, false);
+                FillGrid(dgvMainDiff, diffMainData, n, m, a, b, c, d, true);
+
                 BuildMainReport(rtbMain, *resMain, *resMain2, omega, omega2, method);
 
                 tabControl->SelectedIndex = 2;
@@ -675,30 +733,7 @@ namespace CMLab4 {
                 h2k2));
             rtb->AppendText("  Порядок аппроксимации схемы: 2\r\n\r\n");
 
-            rtb->AppendText("ТАБЛИЦА ЗНАЧЕНИЙ (первые 6×6 узлов):\r\n");
-            int nShow = std::min(6, r.n);
-            int mShow = std::min(6, r.m);
-            int Ny = r.m + 1;
-
-            rtb->AppendText("  u*(xi,yj):\r\n");
-            for (int j = 0; j <= mShow; ++j) {
-                for (int i = 0; i <= nShow; ++i)
-                    rtb->AppendText(String::Format("{0,12:F6}", r.u[i * Ny + j]));
-                rtb->AppendText("\r\n");
-            }
-            rtb->AppendText("  v(N)(xi,yj):\r\n");
-            for (int j = 0; j <= mShow; ++j) {
-                for (int i = 0; i <= nShow; ++i)
-                    rtb->AppendText(String::Format("{0,12:F6}", r.v[i * Ny + j]));
-                rtb->AppendText("\r\n");
-            }
-            rtb->AppendText("  Разность u* − v(N):\r\n");
-            for (int j = 0; j <= mShow; ++j) {
-                for (int i = 0; i <= nShow; ++i)
-                    rtb->AppendText(String::Format("{0,12:E2}",
-                        r.u[i * Ny + j] - r.v[i * Ny + j]));
-                rtb->AppendText("\r\n");
-            }
+            rtb->AppendText("Таблицы значений (u*, v⁽ᴺ⁾, разность) — см. вкладки выше.\r\n");
         }
 
         void BuildMainReport(RichTextBox^ rtb, const SolverResult& r1, const SolverResult& r2,
@@ -737,23 +772,93 @@ namespace CMLab4 {
             rtb->AppendText("Начальное приближение (обе сетки): линейная интерполяция по x\r\n\r\n");
 
             rtb->AppendText("═══════════════════════════════════════════════════════════════\r\n");
-            int nShow = std::min(6, r1.n);
-            int mShow = std::min(6, r1.m);
-            int Ny1 = r1.m + 1;
-            int Ny2 = r2.m + 1;
+            rtb->AppendText("Таблицы значений (v⁽ᴺ⁾, v₂⁽ᴺ²⁾, разность) — см. вкладки выше.\r\n");
+        }
 
-            rtb->AppendText("ТАБЛИЦА v(N) (первые 6×6 узлов):\r\n");
-            for (int j = 0; j <= mShow; ++j) {
-                for (int i = 0; i <= nShow; ++i)
-                    rtb->AppendText(String::Format("{0,12:F6}", r1.v[i * Ny1 + j]));
-                rtb->AppendText("\r\n");
+        // ============================================================
+        //  Таблицы значений сеточной функции
+        // ============================================================
+        DataGridView^ MakeGridView()
+        {
+            auto dgv = gcnew DataGridView();
+            dgv->Dock = DockStyle::Fill;
+            dgv->BackgroundColor = Color::FromArgb(14, 16, 26);
+            dgv->BorderStyle = BorderStyle::None;
+            dgv->Font = gcnew Drawing::Font("Consolas", 8);
+            dgv->ReadOnly = true;
+            dgv->AllowUserToAddRows = false;
+            dgv->AllowUserToDeleteRows = false;
+            dgv->AllowUserToResizeRows = false;
+            dgv->RowHeadersVisible = false;
+            dgv->ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode::DisableResizing;
+            dgv->ColumnHeadersHeight = 28;
+            dgv->SelectionMode = DataGridViewSelectionMode::CellSelect;
+            dgv->EnableHeadersVisualStyles = false;
+            dgv->GridColor = Color::FromArgb(40, 44, 60);
+
+            dgv->DefaultCellStyle->BackColor = Color::FromArgb(14, 16, 26);
+            dgv->DefaultCellStyle->ForeColor = Color::FromArgb(190, 210, 255);
+            dgv->DefaultCellStyle->SelectionBackColor = Color::FromArgb(60, 80, 140);
+            dgv->DefaultCellStyle->SelectionForeColor = Color::White;
+            dgv->DefaultCellStyle->Alignment = DataGridViewContentAlignment::MiddleRight;
+
+            dgv->ColumnHeadersDefaultCellStyle->BackColor = Color::FromArgb(28, 32, 48);
+            dgv->ColumnHeadersDefaultCellStyle->ForeColor = Color::FromArgb(200, 220, 255);
+            dgv->ColumnHeadersDefaultCellStyle->Alignment = DataGridViewContentAlignment::MiddleCenter;
+            dgv->ColumnHeadersDefaultCellStyle->Font = gcnew Drawing::Font("Consolas", 8, FontStyle::Bold);
+            return dgv;
+        }
+
+        // Заполнить DataGridView сеточной функцией data[i*(m+1)+j] на [a,b]×[c,d].
+        // Строки — по y (сверху вниз: y_m → y_0), столбцы — по x (i = 0..n).
+        void FillGrid(DataGridView^ dgv, std::vector<double>* data, int n, int m,
+                      double a, double b, double c, double d, bool scientificFmt)
+        {
+            dgv->SuspendLayout();
+            dgv->Rows->Clear();
+            dgv->Columns->Clear();
+
+            if (!data || data->empty() || n <= 0 || m <= 0) {
+                dgv->ResumeLayout();
+                return;
             }
-            rtb->AppendText("ТАБЛИЦА v₂(N₂) в общих узлах (первые 6×6):\r\n");
-            for (int j = 0; j <= mShow; ++j) {
-                for (int i = 0; i <= nShow; ++i)
-                    rtb->AppendText(String::Format("{0,12:F6}", r2.v[(2 * i) * Ny2 + (2 * j)]));
-                rtb->AppendText("\r\n");
+
+            int Ny = m + 1;
+
+            // Первый столбец — значение y (фиксированный)
+            auto colY = gcnew DataGridViewTextBoxColumn();
+            colY->HeaderText = "y \\ x";
+            colY->Width = 80;
+            colY->Frozen = true;
+            colY->SortMode = DataGridViewColumnSortMode::NotSortable;
+            colY->DefaultCellStyle->BackColor = Color::FromArgb(28, 32, 48);
+            colY->DefaultCellStyle->ForeColor = Color::FromArgb(200, 220, 255);
+            colY->DefaultCellStyle->Font = gcnew Drawing::Font("Consolas", 8, FontStyle::Bold);
+            colY->DefaultCellStyle->Alignment = DataGridViewContentAlignment::MiddleCenter;
+            dgv->Columns->Add(colY);
+
+            // Столбцы — значения x_i
+            for (int i = 0; i <= n; ++i) {
+                double xi = a + (b - a) * (double)i / n;
+                auto col = gcnew DataGridViewTextBoxColumn();
+                col->HeaderText = String::Format("{0:F3}", xi);
+                col->Width = 78;
+                col->SortMode = DataGridViewColumnSortMode::NotSortable;
+                dgv->Columns->Add(col);
             }
+
+            // Строки — для каждого y_j, сверху вниз (j = m, m-1, ..., 0)
+            String^ fmt = scientificFmt ? "{0:E3}" : "{0:F6}";
+            array<Object^>^ cells = gcnew array<Object^>(n + 2);
+            for (int j = m; j >= 0; --j) {
+                double yj = c + (d - c) * (double)j / m;
+                cells[0] = String::Format("{0:F3}", yj);
+                for (int i = 0; i <= n; ++i)
+                    cells[i + 1] = String::Format(fmt, (*data)[i * Ny + j]);
+                dgv->Rows->Add(cells);
+            }
+
+            dgv->ResumeLayout();
         }
 
         // ============================================================
