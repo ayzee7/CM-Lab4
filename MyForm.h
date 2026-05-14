@@ -16,109 +16,144 @@ namespace CMLab4 {
     namespace SWF = System::Windows::Forms;
 
     // ================================================================
-    //  Вспомогательный класс для 3D-графика (surface plot в 2D проекции)
+    //  SurfacePlot — heatmap-визуализация сеточной функции на ZedGraph.
+    //  Каждая ячейка сетки — BoxObj в координатах (x, y); цвет — z(x,y).
+    //  Для крупных сеток применяется подвыборка (≈ до 60×60 ячеек).
     // ================================================================
-    ref class SurfacePanel : public Panel
+    ref class SurfacePlot : public Panel
     {
-    public:
-        std::vector<double>* data;
-        int N, M;
-        double zMin, zMax;
-        String^ title;
+    private:
+        ZedGraphControl^ zgc;
 
-        SurfacePanel() : data(nullptr), N(0), M(0), zMin(0), zMax(1) {}
-
-        void SetData(std::vector<double>* d, int n, int m, String^ t) {
-            data = d; N = n; M = m; title = t;
-            if (data && !data->empty()) {
-                zMin = (*data)[0]; zMax = (*data)[0];
-                for (auto& v : *data) {
-                    if (v < zMin) zMin = v;
-                    if (v > zMax) zMax = v;
-                }
-            }
-            Invalidate();
+        static Color ColorMap(double t) {
+            int r, gr, bl;
+            if (t < 0.25)      { r = 0; gr = (int)(t * 4 * 100);
+                                 bl = (int)(100 + t * 4 * 155); }
+            else if (t < 0.5)  { r = 0; gr = (int)(100 + (t - 0.25) * 4 * 155);
+                                 bl = (int)(255 - (t - 0.25) * 4 * 255); }
+            else if (t < 0.75) { r = (int)((t - 0.5) * 4 * 255);
+                                 gr = 255; bl = 0; }
+            else               { r = 255; gr = (int)(255 - (t - 0.75) * 4 * 255);
+                                 bl = 0; }
+            return Color::FromArgb(
+                std::min(255, std::max(0, r)),
+                std::min(255, std::max(0, gr)),
+                std::min(255, std::max(0, bl)));
         }
 
-    protected:
-        virtual void OnPaint(PaintEventArgs^ e) override {
-            Graphics^ g = e->Graphics;
-            g->SmoothingMode = SmoothingMode::AntiAlias;
-            g->Clear(Color::FromArgb(18, 20, 30));
+    public:
+        SurfacePlot() {
+            this->BackColor = Color::FromArgb(18, 20, 30);
 
-            if (!data || N == 0 || M == 0) {
-                g->DrawString("Нет данных", gcnew Drawing::Font("Consolas", 10), Brushes::Gray, 10, 10);
+            zgc = gcnew ZedGraphControl();
+            zgc->Dock = DockStyle::Fill;
+            zgc->IsShowPointValues = false;
+            zgc->IsEnableHPan = false;
+            zgc->IsEnableVPan = false;
+            zgc->IsEnableHZoom = true;
+            zgc->IsEnableVZoom = true;
+            this->Controls->Add(zgc);
+
+            GraphPane^ pane = zgc->GraphPane;
+            pane->Fill = gcnew Fill(Color::FromArgb(18, 20, 30));
+            pane->Chart->Fill = gcnew Fill(Color::FromArgb(14, 16, 26));
+            pane->Border->Color = Color::FromArgb(80, 80, 110);
+            pane->Chart->Border->Color = Color::FromArgb(80, 80, 110);
+
+            pane->Title->FontSpec->FontColor = Color::White;
+            pane->Title->FontSpec->Family = "Consolas";
+            pane->Title->FontSpec->Size = 11;
+            pane->Title->FontSpec->IsBold = true;
+            pane->Title->FontSpec->Fill = gcnew Fill(Color::Transparent);
+            pane->Title->FontSpec->Border->IsVisible = false;
+
+            pane->XAxis->Title->Text = "x";
+            pane->YAxis->Title->Text = "y";
+            for each (Axis ^ ax in gcnew array<Axis^>{pane->XAxis, pane->YAxis}) {
+                ax->Title->FontSpec->FontColor = Color::FromArgb(180, 200, 255);
+                ax->Title->FontSpec->Family = "Consolas";
+                ax->Title->FontSpec->Size = 10;
+                ax->Title->FontSpec->Fill = gcnew Fill(Color::Transparent);
+                ax->Title->FontSpec->Border->IsVisible = false;
+                ax->Scale->FontSpec->FontColor = Color::FromArgb(170, 190, 230);
+                ax->Scale->FontSpec->Family = "Consolas";
+                ax->Scale->FontSpec->Size = 8;
+                ax->Color = Color::FromArgb(120, 130, 170);
+                ax->MajorTic->Color = Color::FromArgb(120, 130, 170);
+                ax->MinorTic->Color = Color::FromArgb(120, 130, 170);
+                ax->MajorGrid->IsVisible = false;
+                ax->MinorGrid->IsVisible = false;
+            }
+            pane->Legend->IsVisible = false;
+            pane->Margin->All = 8;
+        }
+
+        // Передать новый набор данных в график.
+        void SetData(std::vector<double>* data, int n, int m,
+                     double a, double b, double c, double d, String^ title)
+        {
+            GraphPane^ pane = zgc->GraphPane;
+            pane->Title->Text = title;
+            pane->CurveList->Clear();
+            pane->GraphObjList->Clear();
+
+            if (!data || data->empty() || n <= 0 || m <= 0) {
+                zgc->AxisChange();
+                zgc->Invalidate();
                 return;
             }
 
-            int W = Width, H = Height;
-            int margin = 30;
-            int pw = W - 2 * margin;
-            int ph = H - 2 * margin - 20;
+            int Ny = m + 1;
 
-            // Псевдо-3D: изометрическая проекция heatmap + изолинии
-            // Рисуем как цветовую карту (heatmap)
+            double zMin = (*data)[0], zMax = (*data)[0];
+            for (size_t k = 1; k < data->size(); ++k) {
+                double z = (*data)[k];
+                if (z < zMin) zMin = z;
+                if (z > zMax) zMax = z;
+            }
             double range = zMax - zMin;
             if (range < 1e-15) range = 1.0;
 
-            int stepX = std::max(1, N / 50);
-            int stepY = std::max(1, M / 50);
+            const int target = 60;
+            int stepX = std::max(1, n / target);
+            int stepY = std::max(1, m / target);
 
-            for (int i = 0; i < N; i += stepX) {
-                for (int j = 0; j < M; j += stepY) {
-                    double z = (*data)[i * (M + 1) + j];
+            double hx = (b - a) * (double)stepX / n;
+            double hy = (d - c) * (double)stepY / m;
+
+            for (int i = 0; i + stepX <= n; i += stepX) {
+                for (int j = 0; j + stepY <= m; j += stepY) {
+                    double z = (*data)[i * Ny + j];
                     double t = (z - zMin) / range;
-
-                    // Цвет: синий -> голубой -> зелёный -> жёлтый -> красный
-                    int r, gr, bl;
-                    if (t < 0.25) {
-                        r = 0; gr = (int)(t * 4 * 100);
-                        bl = (int)(100 + t * 4 * 155);
-                    }
-                    else if (t < 0.5) {
-                        r = 0; gr = (int)(100 + (t - 0.25) * 4 * 155);
-                        bl = (int)(255 - (t - 0.25) * 4 * 255);
-                    }
-                    else if (t < 0.75) {
-                        r = (int)((t - 0.5) * 4 * 255);
-                        gr = 255; bl = 0;
-                    }
-                    else {
-                        r = 255; gr = (int)(255 - (t - 0.75) * 4 * 255); bl = 0;
-                    }
-                    r = std::min(255, std::max(0, r));
-                    gr = std::min(255, std::max(0, gr));
-                    bl = std::min(255, std::max(0, bl));
-
-                    int px = margin + (int)((double)i / N * pw);
-                    int py = margin + ph - (int)((double)j / M * ph);
-                    int cw = std::max(2, (int)((double)stepX / N * pw) + 1);
-                    int ch = std::max(2, (int)((double)stepY / M * ph) + 1);
-
-                    g->FillRectangle(gcnew SolidBrush(Color::FromArgb(r, gr, bl)),
-                        px, py - ch, cw, ch);
+                    Color col = ColorMap(t);
+                    double x0 = a + (double)i / n * (b - a);
+                    double y0 = c + (double)j / m * (d - c);
+                    // BoxObj(x_left, y_top, width, height) — y_top = y0+hy
+                    BoxObj^ box = gcnew BoxObj(x0, y0 + hy, hx, hy, col, col);
+                    box->Border->IsVisible = false;
+                    box->IsClippedToChartRect = true;
+                    box->ZOrder = ZOrder::F_BehindGrid;
+                    pane->GraphObjList->Add(box);
                 }
             }
 
-            // Рамка
-            g->DrawRectangle(gcnew Pen(Color::FromArgb(80, 80, 110), 1),
-                margin, margin, pw, ph);
+            String^ rangeText = String::Format("min={0:F4}   max={1:F4}", zMin, zMax);
+            TextObj^ txt = gcnew TextObj(rangeText, 0.02, 0.02,
+                CoordType::ChartFraction, AlignH::Left, AlignV::Top);
+            txt->FontSpec->FontColor = Color::FromArgb(190, 210, 255);
+            txt->FontSpec->Family = "Consolas";
+            txt->FontSpec->Size = 8;
+            txt->FontSpec->Fill = gcnew Fill(Color::FromArgb(0, 0, 0, 180));
+            txt->FontSpec->Border->IsVisible = false;
+            pane->GraphObjList->Add(txt);
 
-            // Метки осей
-            auto lblFont = gcnew Drawing::Font("Consolas", 7);
-            auto lblBrush = Brushes::LightGray;
-            g->DrawString("x", gcnew Drawing::Font("Consolas", 8, FontStyle::Bold), Brushes::White,
-                margin + pw / 2, H - 16);
-            g->DrawString("y", gcnew Drawing::Font("Consolas", 8, FontStyle::Bold), Brushes::White,
-                2, margin + ph / 2);
+            pane->XAxis->Scale->Min = a;
+            pane->XAxis->Scale->Max = b;
+            pane->YAxis->Scale->Min = c;
+            pane->YAxis->Scale->Max = d;
 
-            // min/max
-            g->DrawString(String::Format("min={0:F4}", zMin), lblFont, lblBrush, margin, H - 16);
-            g->DrawString(String::Format("max={0:F4}", zMax), lblFont, lblBrush, W - 90, H - 16);
-
-            // Заголовок
-            g->DrawString(title, gcnew Drawing::Font("Consolas", 9, FontStyle::Bold),
-                Brushes::White, margin, 4);
+            zgc->AxisChange();
+            zgc->Invalidate();
         }
     };
 
@@ -150,12 +185,13 @@ namespace CMLab4 {
         // Вкладка «Тестовая задача»
         RichTextBox^ rtbTest;
         Panel^ pnlTestGraphs;
-        SurfacePanel^ sfExact, ^ sfNumTest, ^ sfDiffTest;
+        SurfacePlot^ sfExact, ^ sfInitTest, ^ sfNumTest, ^ sfDiffTest;
 
         // Вкладка «Основная задача»
         RichTextBox^ rtbMain;
         Panel^ pnlMainGraphs;
-        SurfacePanel^ sfMain, ^ sfMain2, ^ sfDiffMain;
+        SurfacePlot^ sfInitMain, ^ sfMain, ^ sfDiffMain;
+        SurfacePlot^ sfInitMain2, ^ sfMain2;
 
         // Данные
         SolverResult* resTest = nullptr;
@@ -381,15 +417,16 @@ namespace CMLab4 {
             rtbTest->Text = "Запустите расчёт тестовой задачи на вкладке «Параметры».";
             split->Panel1->Controls->Add(rtbTest);
 
-            // Графики (3 панели)
+            // Графики (4 панели: u*, v(0), v(N), разность)
             pnlTestGraphs = gcnew Panel();
             pnlTestGraphs->Dock = DockStyle::Fill;
             pnlTestGraphs->BackColor = Color::FromArgb(18, 20, 30);
 
-            sfExact = gcnew SurfacePanel(); sfExact->title = "Точное решение u*(x,y)";
-            sfNumTest = gcnew SurfacePanel(); sfNumTest->title = "Численное решение v(N)(x,y)";
-            sfDiffTest = gcnew SurfacePanel(); sfDiffTest->title = "Разность u* − v(N)";
-            for each (SurfacePanel ^ sf in gcnew array<SurfacePanel^>{sfExact, sfNumTest, sfDiffTest}) {
+            sfExact    = gcnew SurfacePlot();
+            sfInitTest = gcnew SurfacePlot();
+            sfNumTest  = gcnew SurfacePlot();
+            sfDiffTest = gcnew SurfacePlot();
+            for each (SurfacePlot ^ sf in gcnew array<SurfacePlot^>{sfExact, sfInitTest, sfNumTest, sfDiffTest}) {
                 sf->BackColor = Color::FromArgb(18, 20, 30);
                 pnlTestGraphs->Controls->Add(sf);
             }
@@ -424,10 +461,14 @@ namespace CMLab4 {
             pnlMainGraphs->Dock = DockStyle::Fill;
             pnlMainGraphs->BackColor = Color::FromArgb(18, 20, 30);
 
-            sfMain = gcnew SurfacePanel(); sfMain->title = "v(N)(x,y) на сетке (n,m)";
-            sfMain2 = gcnew SurfacePanel(); sfMain2->title = "v₂(N₂)(x,y) на сетке (2n,2m)";
-            sfDiffMain = gcnew SurfacePanel(); sfDiffMain->title = "Разность v(N) − v₂(N₂)";
-            for each (SurfacePanel ^ sf in gcnew array<SurfacePanel^>{sfMain, sfMain2, sfDiffMain}) {
+            // 5 панелей: v(0), v(N), разность   /   v2(0), v2(N2)
+            sfInitMain  = gcnew SurfacePlot();
+            sfMain      = gcnew SurfacePlot();
+            sfDiffMain  = gcnew SurfacePlot();
+            sfInitMain2 = gcnew SurfacePlot();
+            sfMain2     = gcnew SurfacePlot();
+            for each (SurfacePlot ^ sf in gcnew array<SurfacePlot^>{
+                sfInitMain, sfMain, sfDiffMain, sfInitMain2, sfMain2}) {
                 sf->BackColor = Color::FromArgb(18, 20, 30);
                 pnlMainGraphs->Controls->Add(sf);
             }
@@ -444,16 +485,36 @@ namespace CMLab4 {
             nudOmega->Enabled = !chkAutoOmega->Checked;
         }
 
-        void OnResizeTestGraphs(Object^, EventArgs^) { LayoutThreePanels(pnlTestGraphs, sfExact, sfNumTest, sfDiffTest); }
-        void OnResizeMainGraphs(Object^, EventArgs^) { LayoutThreePanels(pnlMainGraphs, sfMain, sfMain2, sfDiffMain); }
+        void OnResizeTestGraphs(Object^, EventArgs^) {
+            LayoutGrid(pnlTestGraphs,
+                gcnew array<SurfacePlot^>{sfExact, sfInitTest, sfNumTest, sfDiffTest},
+                2, 2);
+        }
+        void OnResizeMainGraphs(Object^, EventArgs^) {
+            LayoutGrid(pnlMainGraphs,
+                gcnew array<SurfacePlot^>{sfInitMain, sfMain, sfDiffMain, sfInitMain2, sfMain2},
+                2, 3);
+        }
 
-        void LayoutThreePanels(Panel^ parent, SurfacePanel^ p1, SurfacePanel^ p2, SurfacePanel^ p3)
+        // Раскладывает массив панелей по сетке rows×cols (порядок — построчно).
+        // Лишние ячейки в последней строке остаются пустыми.
+        void LayoutGrid(Panel^ parent, array<SurfacePlot^>^ panels, int rows, int cols)
         {
-            int w = parent->Width / 3 - 4;
-            int h = parent->Height - 4;
-            p1->Bounds = Rectangle(0, 2, w, h);
-            p2->Bounds = Rectangle(w + 4, 2, w, h);
-            p3->Bounds = Rectangle(2 * w + 8, 2, w, h);
+            const int pad = 4;
+            int totalW = parent->Width;
+            int totalH = parent->Height;
+            int w = (totalW - (cols + 1) * pad) / cols;
+            int h = (totalH - (rows + 1) * pad) / rows;
+            if (w < 1) w = 1;
+            if (h < 1) h = 1;
+            for (int k = 0; k < panels->Length; ++k) {
+                int r = k / cols;
+                int c = k % cols;
+                panels[k]->Bounds = Rectangle(
+                    pad + c * (w + pad),
+                    pad + r * (h + pad),
+                    w, h);
+            }
         }
 
         void OnRunTest(Object^ sender, EventArgs^ e) { RunTest(); }
@@ -492,10 +553,14 @@ namespace CMLab4 {
                         (*diffTestData)[i * (m + 1) + j] =
                         resTest->u[i * (m + 1) + j] - resTest->v[i * (m + 1) + j];
 
-                sfExact->SetData(&resTest->u, n, m, "Точное решение u*(x,y)");
-                sfNumTest->SetData(&resTest->v, n, m, "Численное решение v(N)(x,y)");
-                sfDiffTest->SetData(diffTestData, n, m, "Разность u* − v(N)");
-                LayoutThreePanels(pnlTestGraphs, sfExact, sfNumTest, sfDiffTest);
+                double a = resTest->a, b = resTest->b, c = resTest->c, d = resTest->d;
+                sfExact   ->SetData(&resTest->u,  n, m, a, b, c, d, "Точное решение u*(x,y)");
+                sfInitTest->SetData(&resTest->v0, n, m, a, b, c, d, "Начальное приближение v⁽⁰⁾(x,y)");
+                sfNumTest ->SetData(&resTest->v,  n, m, a, b, c, d, "Численное решение v⁽ᴺ⁾(x,y)");
+                sfDiffTest->SetData(diffTestData, n, m, a, b, c, d, "Разность u* − v⁽ᴺ⁾");
+                LayoutGrid(pnlTestGraphs,
+                    gcnew array<SurfacePlot^>{sfExact, sfInitTest, sfNumTest, sfDiffTest},
+                    2, 2);
 
                 // Справка
                 rtbTest->Text = BuildTestReport(*resTest, omega, method);
@@ -548,10 +613,15 @@ namespace CMLab4 {
                         (*diffMainData)[i * (m + 1) + j] =
                         resMain->v[i * (m + 1) + j] - resMain2->v[(2 * i) * (2 * m + 1) + (2 * j)];
 
-                sfMain->SetData(&resMain->v, n, m, "v(N)(x,y) на сетке (n,m)");
-                sfMain2->SetData(&resMain2->v, 2 * n, 2 * m, "v₂(N₂)(x,y) на сетке (2n,2m)");
-                sfDiffMain->SetData(diffMainData, n, m, "Разность v(N) − v₂(N₂)");
-                LayoutThreePanels(pnlMainGraphs, sfMain, sfMain2, sfDiffMain);
+                double a = resMain->a, b = resMain->b, c = resMain->c, d = resMain->d;
+                sfInitMain ->SetData(&resMain->v0,  n,     m,     a, b, c, d, "Начальное приближение v⁽⁰⁾(x,y), сетка (n,m)");
+                sfMain     ->SetData(&resMain->v,   n,     m,     a, b, c, d, "Численное решение v⁽ᴺ⁾(x,y), сетка (n,m)");
+                sfDiffMain ->SetData(diffMainData,  n,     m,     a, b, c, d, "Разность v⁽ᴺ⁾ − v₂⁽ᴺ²⁾");
+                sfInitMain2->SetData(&resMain2->v0, 2 * n, 2 * m, a, b, c, d, "Начальное приближение v₂⁽⁰⁾(x,y), сетка (2n,2m)");
+                sfMain2    ->SetData(&resMain2->v,  2 * n, 2 * m, a, b, c, d, "Численное решение v₂⁽ᴺ²⁾(x,y), сетка (2n,2m)");
+                LayoutGrid(pnlMainGraphs,
+                    gcnew array<SurfacePlot^>{sfInitMain, sfMain, sfDiffMain, sfInitMain2, sfMain2},
+                    2, 3);
 
                 rtbMain->Text = BuildMainReport(*resMain, *resMain2, omega, omega2, method);
 

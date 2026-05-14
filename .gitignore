@@ -34,3 +34,7 @@
 /x64
 /.vs
 /CM-Lab4
+
+
+*.pdf
+CLAUDE.md
