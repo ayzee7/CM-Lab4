@@ -206,7 +206,7 @@ namespace CMLab4 {
         void InitializeComponent()
         {
             this->Text = L"Решение задачи Дирихле для уравнения Пуассона  |  Вариант 1";
-            this->Size = Drawing::Size(1100, 780);
+            this->WindowState = FormWindowState::Maximized;
             this->MinimumSize = Drawing::Size(900, 650);
             this->BackColor = Color::FromArgb(18, 20, 30);
             this->ForeColor = Color::FromArgb(200, 210, 255);
@@ -237,23 +237,24 @@ namespace CMLab4 {
             SWF::Label^ lbl = gcnew SWF::Label();
             lbl->Text = text;
             lbl->ForeColor = Color::FromArgb(140, 160, 220);
-            lbl->Font = gcnew Drawing::Font("Consolas", 8);
+            lbl->Font = gcnew Drawing::Font("Consolas", 16);
             lbl->Location = Point(0, y);
             lbl->AutoSize = true;
-            y += 18;
+            y += 32;
             return lbl;
         }
 
         NumericUpDown^ addNum(double min, double max, double val, int dec, int& y) {
             NumericUpDown^ nud = gcnew NumericUpDown();
             nud->Location = Point(0, y);
-            nud->Width = 200;
+            nud->Width = 260;
+            nud->Font = gcnew Drawing::Font("Consolas", 14);
             nud->Minimum = (Decimal)min;
             nud->Maximum = (Decimal)max;
             nud->Value = (Decimal)val;
             nud->DecimalPlaces = dec;
             StyleNud(nud);
-            y += 32;
+            y += 42;
             return nud;
         }
 
@@ -281,12 +282,14 @@ namespace CMLab4 {
             SWF::Label^ iterMeth = addLabel("Итерационный метод:", y);
             left->Controls->Add(iterMeth);
             rbSOR = gcnew RadioButton(); rbSOR->Text = "Метод верхней релаксации (МВР)";
-            rbSeidel = gcnew RadioButton(); rbSeidel->Text = "Метод Зейделя (ω = 1)";
+            rbSOR->Font = gcnew Drawing::Font("Consolas", 14);
+            rbSeidel = gcnew RadioButton(); rbSeidel->Text = "Метод Зейделя";
+            rbSeidel->Font = gcnew Drawing::Font("Consolas", 14);
             rbSOR->Checked = true;
             rbSOR->Location = Point(0, y); rbSOR->AutoSize = true;
-            StyleRb(rbSOR); left->Controls->Add(rbSOR); y += 22;
+            StyleRb(rbSOR); left->Controls->Add(rbSOR); y += 30;
             rbSeidel->Location = Point(0, y); rbSeidel->AutoSize = true;
-            StyleRb(rbSeidel); left->Controls->Add(rbSeidel); y += 30;
+            StyleRb(rbSeidel); left->Controls->Add(rbSeidel); y += 40;
 
             // n, m
             SWF::Label^ lblXN = addLabel("Число разбиений по X (n):", y);
@@ -303,10 +306,11 @@ namespace CMLab4 {
             left->Controls->Add(lblOmega);
             chkAutoOmega = gcnew CheckBox();
             chkAutoOmega->Text = "Авто (оптимальный)";
+            chkAutoOmega->Font = gcnew Drawing::Font("Consolas", 14);
             chkAutoOmega->Checked = true;
             chkAutoOmega->Location = Point(0, y);
             chkAutoOmega->AutoSize = true;
-            StyleCb(chkAutoOmega); left->Controls->Add(chkAutoOmega); y += 24;
+            StyleCb(chkAutoOmega); left->Controls->Add(chkAutoOmega); y += 34;
             nudOmega = addNum(0.01, 1.999, 1.9, 4, y);
             left->Controls->Add(nudOmega);
             nudOmega->Enabled = false;
@@ -316,45 +320,47 @@ namespace CMLab4 {
             SWF::Label^ lblEps = addLabel("Точность метода εмет:", y);
             left->Controls->Add(lblEps);
             nudEpsMet = gcnew NumericUpDown();
-            nudEpsMet->Location = Point(0, y); nudEpsMet->Width = 200;
+            nudEpsMet->Location = Point(0, y); nudEpsMet->Width = 260;
+            nudEpsMet->Font = gcnew Drawing::Font("Consolas", 14);
             nudEpsMet->Minimum = (Decimal)1e-12; nudEpsMet->Maximum = (Decimal)0.1;
             nudEpsMet->Value = (Decimal)1e-7;
             nudEpsMet->DecimalPlaces = 10;
             nudEpsMet->Increment = (Decimal)1e-8;
-            StyleNud(nudEpsMet); left->Controls->Add(nudEpsMet); y += 32;
+            StyleNud(nudEpsMet); left->Controls->Add(nudEpsMet); y += 42;
 
             SWF::Label^ lblNmax = addLabel("Макс. число итераций Nmax:", y);
             left->Controls->Add(lblNmax);
             nudNmax = gcnew NumericUpDown();
-            nudNmax->Location = Point(0, y); nudNmax->Width = 200;
+            nudNmax->Location = Point(0, y); nudNmax->Width = 260;
+            nudNmax->Font = gcnew Drawing::Font("Consolas", 14);
             nudNmax->Minimum = 100; nudNmax->Maximum = 200000;
             nudNmax->Value = 50000;
             nudNmax->DecimalPlaces = 0;
-            StyleNud(nudNmax); left->Controls->Add(nudNmax); y += 32;
+            StyleNud(nudNmax); left->Controls->Add(nudNmax); y += 42;
 
-            y += 10;
+            y += 16;
 
             // Кнопки
             btnRunTest = gcnew Button();
-            btnRunTest->Text = "▶  Решить тестовую задачу";
-            btnRunTest->Location = Point(0, y); btnRunTest->Width = 220; btnRunTest->Height = 36;
+            btnRunTest->Text = "Решить тестовую задачу";
+            btnRunTest->Location = Point(0, y); btnRunTest->Width = 280; btnRunTest->Height = 44;
             StyleBtn(btnRunTest, Color::FromArgb(40, 80, 160));
             btnRunTest->Click += gcnew EventHandler(this, &MyForm::OnRunTest);
-            left->Controls->Add(btnRunTest); y += 46;
+            left->Controls->Add(btnRunTest); y += 56;
 
             btnRunMain = gcnew Button();
-            btnRunMain->Text = "▶  Решить основную задачу";
-            btnRunMain->Location = Point(0, y); btnRunMain->Width = 220; btnRunMain->Height = 36;
+            btnRunMain->Text = "Решить основную задачу";
+            btnRunMain->Location = Point(0, y); btnRunMain->Width = 280; btnRunMain->Height = 44;
             StyleBtn(btnRunMain, Color::FromArgb(40, 130, 80));
             btnRunMain->Click += gcnew EventHandler(this, &MyForm::OnRunMain);
-            left->Controls->Add(btnRunMain); y += 46;
+            left->Controls->Add(btnRunMain); y += 56;
 
             btnRunBoth = gcnew Button();
-            btnRunBoth->Text = "▶▶  Решить обе задачи";
-            btnRunBoth->Location = Point(0, y); btnRunBoth->Width = 220; btnRunBoth->Height = 36;
+            btnRunBoth->Text = "Решить обе задачи";
+            btnRunBoth->Location = Point(0, y); btnRunBoth->Width = 280; btnRunBoth->Height = 44;
             StyleBtn(btnRunBoth, Color::FromArgb(100, 50, 140));
             btnRunBoth->Click += gcnew EventHandler(this, &MyForm::OnRunBoth);
-            left->Controls->Add(btnRunBoth); y += 46;
+            left->Controls->Add(btnRunBoth); y += 56;
 
             left->AutoScroll = true;
 
@@ -364,7 +370,7 @@ namespace CMLab4 {
             right->ReadOnly = true;
             right->BackColor = Color::FromArgb(14, 16, 26);
             right->ForeColor = Color::FromArgb(180, 200, 255);
-            right->Font = gcnew Drawing::Font("Consolas", 9);
+            right->Font = gcnew Drawing::Font("Consolas", 16);
             right->BorderStyle = BorderStyle::None;
             right->Text =
                 "ВАРИАНТ 1.  Задача Дирихле для уравнения Пуассона\r\n"
@@ -402,8 +408,8 @@ namespace CMLab4 {
         {
             auto split = gcnew SplitContainer();
             split->Dock = DockStyle::Fill;
-            split->Orientation = Orientation::Horizontal;
-            split->SplitterDistance = 320;
+            split->Orientation = Orientation::Vertical;
+            //split->SplitterDistance = 320;
             split->BackColor = Color::Transparent;
 
             // Верхняя секция: вкладки «Справка / u* / v(N) / разность»
@@ -417,7 +423,7 @@ namespace CMLab4 {
             rtbTest->ReadOnly = true;
             rtbTest->BackColor = Color::FromArgb(14, 16, 26);
             rtbTest->ForeColor = Color::FromArgb(190, 210, 255);
-            rtbTest->Font = gcnew Drawing::Font("Consolas", 8.5f);
+            rtbTest->Font = gcnew Drawing::Font("Consolas", 16);
             rtbTest->BorderStyle = BorderStyle::None;
             rtbTest->Text = "Запустите расчёт тестовой задачи на вкладке «Параметры».";
             tpReport->Controls->Add(rtbTest);
@@ -463,8 +469,8 @@ namespace CMLab4 {
         {
             auto split = gcnew SplitContainer();
             split->Dock = DockStyle::Fill;
-            split->Orientation = Orientation::Horizontal;
-            split->SplitterDistance = 320;
+            split->Orientation = Orientation::Vertical;
+            //split->SplitterDistance = 320;
             split->BackColor = Color::Transparent;
 
             // Верхняя секция: вкладки «Справка / v(N) / v2(N2) / разность»
@@ -478,7 +484,7 @@ namespace CMLab4 {
             rtbMain->ReadOnly = true;
             rtbMain->BackColor = Color::FromArgb(14, 16, 26);
             rtbMain->ForeColor = Color::FromArgb(190, 210, 255);
-            rtbMain->Font = gcnew Drawing::Font("Consolas", 8.5f);
+            rtbMain->Font = gcnew Drawing::Font("Consolas", 16);
             rtbMain->BorderStyle = BorderStyle::None;
             rtbMain->Text = "Запустите расчёт основной задачи на вкладке «Параметры».";
             tpReport->Controls->Add(rtbMain);
@@ -882,7 +888,7 @@ namespace CMLab4 {
             btn->ForeColor = Color::White;
             btn->FlatStyle = FlatStyle::Flat;
             btn->FlatAppearance->BorderSize = 0;
-            btn->Font = gcnew Drawing::Font("Consolas", 9, FontStyle::Bold);
+            btn->Font = gcnew Drawing::Font("Consolas", 14, FontStyle::Bold);
             btn->Cursor = Cursors::Hand;
         }
         void StyleRb(RadioButton^ rb) {
