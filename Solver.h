@@ -16,8 +16,11 @@ struct SolverResult
     double h, k;           // шаги сетки
     double omega;          // параметр релаксации
     int    iterDone;       // фактическое число итераций
-    double residualNorm;   // норма невязки (max)
-    double methodError;    // достигнутая точность итерационного метода
+    double residualNorm;   // ||R(N)||∞ — невязка на финальном решении
+    double residualNorm0;  // ||R(0)||∞ — невязка на начальном приближении
+    double methodError;    // max|v^(k+1) − v^(k)| на последней итерации
+    double effectiveError; // оценка реальной погрешности ≈ δ·ρ/(1−ρ)
+    double rhoEstimate;    // апостериорная оценка спектрального радиуса
     double a, b, c, d;     // границы области
 
     // Сеточные функции (размер (n+1)*(m+1), индекс i*(m+1)+j)
@@ -67,7 +70,6 @@ public:
         // -Δu* (правая часть тестовой задачи)
         double pxy = M_PI * x * y;
         double s   = std::sin(pxy);
-        double c2  = std::cos(pxy);
         double u   = std::exp(s * s);
 
         // ∂u/∂x = u * π y * sin(2πxy)
@@ -99,11 +101,10 @@ public:
 
     // ============================================================
     //  Оптимальный параметр МВР для прямоугольной области
-    //  ω_opt = 2 / (1 + sin(π h / (b-a)))  (приближённая формула)
+    //  ω_opt = 2 / (1 + sqrt(1 − ρ²))
     // ============================================================
     static double optimalOmega(int n, int m)
     {
-        // Оценка спектрального радиуса матрицы Якоби
         double rho = 0.5 * (std::cos(M_PI / n) + std::cos(M_PI / m));
         return 2.0 / (1.0 + std::sqrt(1.0 - rho * rho));
     }
@@ -131,12 +132,9 @@ public:
         double k = (d - c) / m;
         res.h = h; res.k = k;
 
-        int Nx = n + 1, Ny = m + 1;
-        int total = Nx * Ny;
+        const int Nx = n + 1, Ny = m + 1;
+        const int total = Nx * Ny;
 
-        // Лямбды правой части и граничных условий
-        auto F  = isTest ? std::function<double(double,double)>(fTest)
-                         : std::function<double(double,double)>(fMain);
         auto BC = [&](int i, int j, double xi, double yj) -> double {
             if (isTest) return uExact(xi, yj);
             if (i == 0)  return mu1(yj);
@@ -155,75 +153,112 @@ public:
                 if (i == 0 || i == n || j == 0 || j == m) {
                     v[i * Ny + j] = BC(i, j, xi, yj);
                 } else {
-                    // Линейная интерполяция граничных значений по x
                     double t = (double)i / n;
                     v[i * Ny + j] = (1.0 - t) * BC(0, j, a, yj)
                                   +        t  * BC(n, j, b, yj);
                 }
             }
         }
-
-        // Сохранить начальное приближение для визуализации
         res.v0 = v;
 
-        // --- Коэффициенты схемы ---
-        double h2 = h * h, k2 = k * k;
-        double denom = 2.0 / h2 + 2.0 / k2;   // главный диагональный коэффициент
-
-        // Параметр (ω для МВР, 1.0 для Зейделя)
-        double om = (method == Method::Seidel) ? 1.0 : omega;
-
-        // --- Итерационный процесс ---
-        double iterErr = 1e100;
-        int    iter    = 0;
-
-        while (iter < Nmax && iterErr > epsMet)
-        {
-            iterErr = 0.0;
-            for (int i = 1; i < n; ++i) {
-                double xi = a + i * h;
-                for (int j = 1; j < m; ++j) {
-                    double yj = c + j * k;
-                    double fval = F(xi, yj);
-
-                    // Стандартная 5-точечная схема
-                    double rhs = fval
-                               + (v[(i-1)*Ny+j] + v[(i+1)*Ny+j]) / h2
-                               + (v[i*Ny+(j-1)] + v[i*Ny+(j+1)]) / k2;
-
-                    double vNew = rhs / denom;
-                    double old  = v[i * Ny + j];
-                    double updated = old + om * (vNew - old);  // МВР / Зейдель
-
-                    iterErr = std::max(iterErr, std::abs(updated - old));
-                    v[i * Ny + j] = updated;
-                }
-            }
-            ++iter;
-        }
-
-        res.iterDone   = iter;
-        res.methodError = iterErr;
-        res.v = v;
-
-        // --- Норма невязки (max) ---
-        double resNorm = 0.0;
+        // --- Предвычисление правой части во внутренних узлах ---
+        // Снимает 3–5 трансцендентных вызовов на узел в каждой итерации.
+        std::vector<double> fGrid(total, 0.0);
         for (int i = 1; i < n; ++i) {
             double xi = a + i * h;
             for (int j = 1; j < m; ++j) {
                 double yj = c + j * k;
-                double Lv = (v[(i-1)*Ny+j] - 2*v[i*Ny+j] + v[(i+1)*Ny+j]) / h2
-                           +(v[i*Ny+(j-1)] - 2*v[i*Ny+j] + v[i*Ny+(j+1)]) / k2;
-                double R = F(xi, yj) + Lv;   // Δv + f
-                resNorm = std::max(resNorm, std::abs(R));
+                fGrid[i * Ny + j] = isTest ? fTest(xi, yj) : fMain(xi, yj);
             }
         }
-        res.residualNorm = resNorm;
+
+        // --- Коэффициенты схемы (умножения вместо делений) ---
+        const double invH2 = 1.0 / (h * h);
+        const double invK2 = 1.0 / (k * k);
+        const double invDenom = 1.0 / (2.0 * (invH2 + invK2));
+        const double om = (method == Method::Seidel) ? 1.0 : omega;
+
+        // --- Невязка ||F + Δv||∞ во внутренних узлах ---
+        auto residualMax = [&](const std::vector<double>& w) -> double {
+            double rn = 0.0;
+            for (int i = 1; i < n; ++i) {
+                for (int j = 1; j < m; ++j) {
+                    int idx = i * Ny + j;
+                    double Lv = (w[idx - Ny] - 2.0 * w[idx] + w[idx + Ny]) * invH2
+                              + (w[idx - 1]  - 2.0 * w[idx] + w[idx + 1])  * invK2;
+                    double R = fGrid[idx] + Lv;
+                    double ar = std::abs(R);
+                    if (ar > rn) rn = ar;
+                }
+            }
+            return rn;
+        };
+
+        // Невязка на начальном приближении (для справки)
+        res.residualNorm0 = residualMax(v);
+
+        // --- Итерационный процесс с адаптивной оценкой сходимости ---
+        // δ_k = max|v^(k) − v^(k−1)|.  Если ρ — асимптотический фактор
+        // подавления невязки, то ||v − v*||∞ ≈ δ · ρ / (1 − ρ).
+        // При ρ → 1 (большие сетки) "сырой" δ занижает реальную ошибку
+        // на (1−ρ)⁻¹ раз — поэтому останавливаемся по effErr.
+        double iterErr = 0.0;
+        double prevErr = 0.0;
+        double rhoEst  = 0.0;
+        double effErr  = 1e100;
+        int    iter    = 0;
+        const int rhoWarmup = 10;
+
+        while (iter < Nmax && effErr > epsMet)
+        {
+            iterErr = 0.0;
+            for (int i = 1; i < n; ++i) {
+                double rowMax = 0.0;
+                int row = i * Ny;
+                for (int j = 1; j < m; ++j) {
+                    int idx = row + j;
+                    double rhs = fGrid[idx]
+                               + (v[idx - Ny] + v[idx + Ny]) * invH2
+                               + (v[idx - 1]  + v[idx + 1])  * invK2;
+                    double vNew    = rhs * invDenom;
+                    double old     = v[idx];
+                    double updated = old + om * (vNew - old);   // МВР / Зейдель
+                    double d = std::abs(updated - old);
+                    if (d > rowMax) rowMax = d;
+                    v[idx] = updated;
+                }
+                if (rowMax > iterErr) iterErr = rowMax;
+            }
+            ++iter;
+
+            // Апостериорная оценка ρ с экспоненциальным сглаживанием
+            if (iter > rhoWarmup && prevErr > 1e-30 && iterErr > 0.0) {
+                double r = iterErr / prevErr;
+                if (r > 0.0 && r < 1.0)
+                    rhoEst = (rhoEst == 0.0) ? r : 0.9 * rhoEst + 0.1 * r;
+            }
+            prevErr = iterErr;
+
+            // Реалистичная оценка погрешности
+            if (rhoEst > 1e-3 && rhoEst < 1.0)
+                effErr = iterErr * rhoEst / (1.0 - rhoEst);
+            else
+                effErr = iterErr;
+        }
+
+        res.iterDone       = iter;
+        res.methodError    = iterErr;
+        res.effectiveError = effErr;
+        res.rhoEstimate    = rhoEst;
+        res.v = v;
+
+        // --- Итоговая невязка ---
+        res.residualNorm = residualMax(v);
 
         // --- Погрешность для тестовой задачи ---
-        res.epsilon1  = 0.0;
-        res.iMaxErr   = 0;
-        res.jMaxErr   = 0;
+        res.epsilon1 = 0.0;
+        res.iMaxErr  = 0;
+        res.jMaxErr  = 0;
         if (isTest) {
             res.u.resize(total);
             for (int i = 0; i < Nx; ++i) {
@@ -232,7 +267,7 @@ public:
                     double yj = c + j * k;
                     double ex = uExact(xi, yj);
                     res.u[i * Ny + j] = ex;
-                    double diff = std::abs(ex - v[i*Ny+j]);
+                    double diff = std::abs(ex - v[i * Ny + j]);
                     if (diff > res.epsilon1) {
                         res.epsilon1 = diff;
                         res.iMaxErr  = i;

@@ -291,11 +291,11 @@ namespace CMLab4 {
             // n, m
             SWF::Label^ lblXN = addLabel("Число разбиений по X (n):", y);
             left->Controls->Add(lblXN);
-            nudN = addNum(4, 500, 40, 0, y);
+            nudN = addNum(4, 4000, 40, 0, y);
             left->Controls->Add(nudN);
             SWF::Label^ lblYM = addLabel("Число разбиений по Y (m):", y);
             left->Controls->Add(lblYM);
-            nudM = addNum(4, 500, 40, 0, y);
+            nudM = addNum(4, 4000, 40, 0, y);
             left->Controls->Add(nudM);
 
             // omega
@@ -707,9 +707,15 @@ namespace CMLab4 {
             rtb->AppendText(String::Format("Критерий остановки: εмет = {0:E2}, Nmax = {1}\r\n",
                 (double)nudEpsMet->Value, (int)nudNmax->Value));
             rtb->AppendText(String::Format("Итераций выполнено: N = {0}\r\n", r.iterDone));
-            rtb->AppendText(String::Format("Достигнутая точность метода: ε(N) = {0:E4}\r\n",
+            rtb->AppendText(String::Format("Достигнутая точность метода: δ(N) = max|v(k+1)−v(k)| = {0:E4}\r\n",
                 r.methodError));
-            rtb->AppendText(String::Format("Норма невязки (max): ||R(N)|| = {0:E4}\r\n\r\n",
+            rtb->AppendText(String::Format("Оценка спектрального радиуса:  ρ ≈ {0:F6}\r\n",
+                r.rhoEstimate));
+            rtb->AppendText(String::Format("Реалистичная оценка ошибки:    δ·ρ/(1−ρ) ≈ {0:E4}\r\n",
+                r.effectiveError));
+            rtb->AppendText(String::Format("Норма невязки на v⁽⁰⁾: ||R(0)||∞ = {0:E4}\r\n",
+                r.residualNorm0));
+            rtb->AppendText(String::Format("Норма невязки на v⁽ᴺ⁾: ||R(N)||∞ = {0:E4}\r\n\r\n",
                 r.residualNorm));
 
             rtb->AppendText("Тестовая задача должна быть решена с погрешностью ≤ 0.5·10⁻⁶\r\n");
@@ -750,16 +756,22 @@ namespace CMLab4 {
             rtb->AppendText(String::Format("ОСНОВНАЯ СЕТКА (n={0}, m={1}):\r\n", r1.n, r1.m));
             rtb->AppendText(String::Format("  ω = {0:F6}  εмет = {1:E2}\r\n",
                 omega, (double)nudEpsMet->Value * 0.1));
-            rtb->AppendText(String::Format("  Итераций: N = {0}  ε(N) = {1:E4}\r\n",
+            rtb->AppendText(String::Format("  Итераций: N = {0}  δ(N) = {1:E4}\r\n",
                 r1.iterDone, r1.methodError));
-            rtb->AppendText(String::Format("  ||R(N)|| (max) = {0:E4}\r\n\r\n", r1.residualNorm));
+            rtb->AppendText(String::Format("  ρ ≈ {0:F6}   δ·ρ/(1−ρ) ≈ {1:E4}\r\n",
+                r1.rhoEstimate, r1.effectiveError));
+            rtb->AppendText(String::Format("  ||R(0)||∞ = {0:E4}    ||R(N)||∞ = {1:E4}\r\n\r\n",
+                r1.residualNorm0, r1.residualNorm));
 
             rtb->AppendText(String::Format("УТОЧНЁННАЯ СЕТКА (2n={0}, 2m={1}):\r\n", r2.n, r2.m));
             rtb->AppendText(String::Format("  ω₂ = {0:F6}  εмет₂ = {1:E2}\r\n",
                 omega2, (double)nudEpsMet->Value * 0.01));
-            rtb->AppendText(String::Format("  Итераций: N₂ = {0}  ε(N₂) = {1:E4}\r\n",
+            rtb->AppendText(String::Format("  Итераций: N₂ = {0}  δ(N₂) = {1:E4}\r\n",
                 r2.iterDone, r2.methodError));
-            rtb->AppendText(String::Format("  ||R(N₂)|| (max) = {0:E4}\r\n\r\n", r2.residualNorm));
+            rtb->AppendText(String::Format("  ρ ≈ {0:F6}   δ·ρ/(1−ρ) ≈ {1:E4}\r\n",
+                r2.rhoEstimate, r2.effectiveError));
+            rtb->AppendText(String::Format("  ||R(0)||∞ = {0:E4}    ||R(N₂)||∞ = {1:E4}\r\n\r\n",
+                r2.residualNorm0, r2.residualNorm));
 
             rtb->AppendText("Основная задача должна быть решена с точностью ≤ 0.5·10⁻⁶\r\n");
             rtb->AppendText(String::Format("Достигнутая точность: ε₂ = {0:E4}\r\n", r1.epsilon2));
