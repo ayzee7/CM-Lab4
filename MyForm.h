@@ -283,7 +283,7 @@ namespace CMLab4 {
             left->Controls->Add(iterMeth);
             rbSOR = gcnew RadioButton(); rbSOR->Text = "Метод верхней релаксации (МВР)";
             rbSOR->Font = gcnew Drawing::Font("Consolas", 14);
-            rbSeidel = gcnew RadioButton(); rbSeidel->Text = "Метод Зейделя";
+            rbSeidel = gcnew RadioButton(); rbSeidel->Text = "Метод Зейделя (ω = 1)";
             rbSeidel->Font = gcnew Drawing::Font("Consolas", 14);
             rbSOR->Checked = true;
             rbSOR->Location = Point(0, y); rbSOR->AutoSize = true;
@@ -580,7 +580,9 @@ namespace CMLab4 {
                 int Nmax = (int)nudNmax->Value;
                 double epsMet = (double)nudEpsMet->Value;
                 double omega;
-                if (chkAutoOmega->Checked)
+                if (rbSeidel->Checked)
+                    omega = 1.0;
+                else if (chkAutoOmega->Checked)
                     omega = PoissonSolver::optimalOmega(n, m);
                 else
                     omega = (double)nudOmega->Value;
@@ -636,7 +638,9 @@ namespace CMLab4 {
                 int Nmax = (int)nudNmax->Value;
                 double epsMet = (double)nudEpsMet->Value;
                 double omega;
-                if (chkAutoOmega->Checked)
+                if (rbSeidel->Checked)
+                    omega = 1.0;
+                else if (chkAutoOmega->Checked)
                     omega = PoissonSolver::optimalOmega(n, m);
                 else
                     omega = (double)nudOmega->Value;
@@ -715,8 +719,10 @@ namespace CMLab4 {
             rtb->AppendText(String::Format("Итераций выполнено: N = {0}\r\n", r.iterDone));
             rtb->AppendText(String::Format("Достигнутая точность метода: ε(N) = {0:E4}\r\n",
                 r.methodError));
+            rtb->AppendText(String::Format("Норма невязки (max): ||R(0)|| = {0:E4}\r\n",
+                r.residualNormV0));
             rtb->AppendText(String::Format("Норма невязки (max): ||R(N)|| = {0:E4}\r\n\r\n",
-                r.residualNorm));
+                r.residualNormVN));
 
             rtb->AppendText("Тестовая задача должна быть решена с погрешностью ≤ 0.5·10⁻⁶\r\n");
             rtb->AppendText(String::Format("Достигнутая погрешность: ε₁ = {0:E4}\r\n", r.epsilon1));
@@ -758,14 +764,16 @@ namespace CMLab4 {
                 omega, (double)nudEpsMet->Value * 0.1));
             rtb->AppendText(String::Format("  Итераций: N = {0}  ε(N) = {1:E4}\r\n",
                 r1.iterDone, r1.methodError));
-            rtb->AppendText(String::Format("  ||R(N)|| (max) = {0:E4}\r\n\r\n", r1.residualNorm));
+            rtb->AppendText(String::Format("  ||R(0)|| (max) = {0:E4}\r\n", r1.residualNormV0));
+            rtb->AppendText(String::Format("  ||R(N)|| (max) = {0:E4}\r\n\r\n", r1.residualNormVN));
 
             rtb->AppendText(String::Format("УТОЧНЁННАЯ СЕТКА (2n={0}, 2m={1}):\r\n", r2.n, r2.m));
             rtb->AppendText(String::Format("  ω₂ = {0:F6}  εмет₂ = {1:E2}\r\n",
                 omega2, (double)nudEpsMet->Value * 0.01));
             rtb->AppendText(String::Format("  Итераций: N₂ = {0}  ε(N₂) = {1:E4}\r\n",
                 r2.iterDone, r2.methodError));
-            rtb->AppendText(String::Format("  ||R(N₂)|| (max) = {0:E4}\r\n\r\n", r2.residualNorm));
+            rtb->AppendText(String::Format("  ||R(0)|| (max) = {0:E4}\r\n", r2.residualNormV0));
+            rtb->AppendText(String::Format("  ||R(N₂)|| (max) = {0:E4}\r\n\r\n", r2.residualNormVN));
 
             rtb->AppendText("Основная задача должна быть решена с точностью ≤ 0.5·10⁻⁶\r\n");
             rtb->AppendText(String::Format("Достигнутая точность: ε₂ = {0:E4}\r\n", r1.epsilon2));
